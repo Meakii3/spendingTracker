@@ -53,12 +53,24 @@ function jsonPost(path, body, method = 'POST') {
 
 // ---------- shared UI pieces ----------
 
+const ICONS = {
+  logo: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12V7H5a2 2 0 0 1 0-4h14v4"/><path d="M3 5v14a2 2 0 0 0 2 2h16v-5"/><path d="M18 12a2 2 0 0 0 0 4h4v-4Z"/></svg>`,
+  home: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m3 10.5 9-7.5 9 7.5"/><path d="M5 9.5V20a1 1 0 0 0 1 1h4v-6h4v6h4a1 1 0 0 0 1-1V9.5"/></svg>`,
+  receipt: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M5 21V4a1 1 0 0 1 1-1h12a1 1 0 0 1 1 1v17l-2.5-1.5L14 21l-2-1.5L10 21l-2.5-1.5Z"/><path d="M9 7.5h6M9 11h6"/></svg>`,
+  building: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 21V5a1 1 0 0 1 1-1h9a1 1 0 0 1 1 1v16"/><path d="M15 9h4a1 1 0 0 1 1 1v11"/><path d="M2 21h20"/><path d="M7.5 8h1M7.5 12h1M7.5 16h1M11 8h1M11 12h1M11 16h1"/></svg>`,
+  people: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.5"/><path d="M3 20c0-3 2.7-5 6-5s6 2 6 5"/><path d="M16.5 4.9a3.5 3.5 0 0 1 0 6.2"/><path d="M18.5 15.5c1.9.8 3 2.3 3 4.5"/></svg>`,
+  gear: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.87l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.7 1.7 0 0 0-1.87-.34 1.7 1.7 0 0 0-1.03 1.56V21a2 2 0 1 1-4 0v-.09A1.7 1.7 0 0 0 8.98 19.4a1.7 1.7 0 0 0-1.87.34l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.7 1.7 0 0 0 .34-1.87 1.7 1.7 0 0 0-1.56-1.03H3a2 2 0 1 1 0-4h.09A1.7 1.7 0 0 0 4.6 8.98a1.7 1.7 0 0 0-.34-1.87l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.7 1.7 0 0 0 1.87.34H9a1.7 1.7 0 0 0 1.03-1.56V3a2 2 0 1 1 4 0v.09c0 .68.4 1.3 1.03 1.56a1.7 1.7 0 0 0 1.87-.34l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.7 1.7 0 0 0-.34 1.87V9c.26.63.88 1.03 1.56 1.03H21a2 2 0 1 1 0 4h-.09a1.7 1.7 0 0 0-1.56 1.03Z"/></svg>`,
+};
+
 function topbar() {
   return `
     <div class="topbar">
-      <div>
-        <h1>${t('app_name')}</h1>
-        <div class="sub">${t('tagline')}</div>
+      <div class="brand">
+        <div class="brand-mark">${ICONS.logo}</div>
+        <div>
+          <h1>${t('app_name')}</h1>
+          <div class="sub">${t('tagline')}</div>
+        </div>
       </div>
       <button class="lang-toggle" onclick="toggleLang()">${document.documentElement.lang === 'ar' ? 'English' : 'العربية'}</button>
     </div>`;
@@ -66,17 +78,17 @@ function topbar() {
 
 function bottomNav(active) {
   const tabs = [
-    ['dashboard', '🏠', 'nav_dashboard'],
-    ['expenses', '🧾', 'nav_expenses'],
-    ['projects', '🏗️', 'nav_projects'],
-    ['payees', '👷', 'nav_payees'],
-    ['settings', '⚙️', 'nav_settings'],
+    ['dashboard', 'home', 'nav_dashboard'],
+    ['expenses', 'receipt', 'nav_expenses'],
+    ['projects', 'building', 'nav_projects'],
+    ['payees', 'people', 'nav_payees'],
+    ['settings', 'gear', 'nav_settings'],
   ];
   return `
     <nav class="bottom-nav">
       ${tabs.map(([route, icon, key]) => `
         <button class="${active === route ? 'active' : ''}" onclick="location.hash='#/${route}'">
-          <span class="icon">${icon}</span>${t(key)}
+          ${ICONS[icon]}${t(key)}
         </button>`).join('')}
     </nav>`;
 }
@@ -169,7 +181,7 @@ async function confirmDelete(url) {
 function renderLogin() {
   $app.innerHTML = `
     <div class="auth-wrap">
-      <div class="logo"><div class="mark">💰</div><h1>${t('app_name')}</h1><p>${t('tagline')}</p></div>
+      <div class="logo"><div class="brand-mark">${ICONS.logo}</div><h1>${t('app_name')}</h1><p>${t('tagline')}</p></div>
       <div class="card">
         <form id="login-form">
           <div class="form-error"></div>
@@ -195,7 +207,7 @@ function renderLogin() {
 function renderSetup() {
   $app.innerHTML = `
     <div class="auth-wrap">
-      <div class="logo"><div class="mark">💰</div><h1>${t('app_name')}</h1></div>
+      <div class="logo"><div class="brand-mark">${ICONS.logo}</div><h1>${t('app_name')}</h1></div>
       <div class="card">
         <h2>${t('first_run_title')}</h2>
         <p class="hint">${t('first_run_hint')}</p>
