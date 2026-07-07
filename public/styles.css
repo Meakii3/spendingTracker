@@ -193,6 +193,10 @@ body {
   transition: transform 0.1s ease, filter 0.15s ease;
 }
 .btn:active { transform: scale(0.98); filter: brightness(1.08); }
+.btn.receive {
+  background: linear-gradient(135deg, #14b814 0%, #067d06 100%);
+  box-shadow: 0 2px 8px rgba(12, 163, 12, 0.35);
+}
 .btn.secondary {
   background: var(--surface); color: var(--ink-2); border: 1px solid var(--border);
   box-shadow: var(--shadow-card);

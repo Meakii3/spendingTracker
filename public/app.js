@@ -120,6 +120,39 @@ function budgetMeter(budget, spent) {
     </div>`;
 }
 
+function spentFromReceivedMeter(received, spent) {
+  if (!received) return '';
+  const pct = (spent / received) * 100;
+  const over = spent > received;
+  return `
+    <div class="bar-head" style="display:flex;justify-content:space-between;font-size:0.85rem;margin-bottom:6px">
+      <span style="color:var(--ink-2);font-weight:500">${t('spent_from_payments')}</span>
+      <span style="font-weight:700;font-variant-numeric:tabular-nums">${fmt(spent)}</span>
+    </div>
+    <div class="bar-track"><div class="bar-fill ${over ? 'over' : ''}" style="width:${Math.min(100, pct)}%"></div></div>
+    <div class="meter-note">
+      <span>${Math.round(pct)}%</span>
+      ${over
+        ? `<span class="over-flag">⚠ ${t('overspent_received')}: ${fmt(spent - received)}</span>`
+        : `<span class="remaining-flag">${t('balance_in_hand')}: ${fmt(received - spent)}</span>`}
+    </div>`;
+}
+
+// Allocate total project spending across received payments oldest-first,
+// so each installment shows how much of it is already consumed.
+function allocateSpending(clientPayments, totalSpent) {
+  const used = new Map();
+  let pool = totalSpent;
+  [...clientPayments]
+    .sort((a, b) => a.payment_date.localeCompare(b.payment_date) || a.id - b.id)
+    .forEach(cp => {
+      const u = Math.max(0, Math.min(pool, cp.amount));
+      used.set(cp.id, u);
+      pool -= u;
+    });
+  return used;
+}
+
 function contractMeter(contract, received) {
   if (!contract) return '';
   const pct = (received / contract) * 100;
@@ -434,24 +467,36 @@ async function renderProjectDetail(id) {
     <div class="card">
       <div class="section-head">
         <h2>${t('client_payments')}</h2>
-        <button class="btn small" onclick="openClientPaymentModal(${p.id})">＋ ${t('add_client_payment')}</button>
+        <button class="btn small receive" onclick="openClientPaymentModal(${p.id})">＋ ${t('add_client_payment')}</button>
       </div>
       <div class="tile-row" style="margin-bottom:0">
         <div class="stat-tile"><div class="label">${t('contract_value')}</div><div class="value">${p.contract_value ? fmt(p.contract_value) : t('none')}</div></div>
         <div class="stat-tile"><div class="label">${t('received')}</div><div class="value">${fmt(p.received)}</div></div>
       </div>
       ${p.contract_value ? `<div style="margin-top:12px">${contractMeter(p.contract_value, p.received)}</div>` : ''}
+      ${p.received ? `<div style="margin-top:16px">${spentFromReceivedMeter(p.received, p.spent)}</div>` : ''}
       <div style="margin-top:8px">
-      ${d.clientPayments.length ? d.clientPayments.map(x => `
+      ${d.clientPayments.length ? (() => {
+        const usedMap = allocateSpending(d.clientPayments, p.spent);
+        return d.clientPayments.map(x => {
+          const used = usedMap.get(x.id) || 0;
+          const left = x.amount - used;
+          const usage = left <= 0
+            ? `<span class="over-flag">${t('fully_used')}</span>`
+            : `${t('spent_from_this')}: ${fmt(used)} · <span class="remaining-flag">${t('left_from_this')}: ${fmt(left)}</span>`;
+          return `
         <div class="list-item">
           <div class="li-main">
             <div class="li-title">${t('received_payment')}</div>
-            <div class="li-sub">${fmtDate(x.payment_date)}${x.note ? ' · ' + esc(x.note) : ''}${x.created_by_name ? ` · ${t('added_by')} ${esc(x.created_by_name)}` : ''}
+            <div class="li-sub">${fmtDate(x.payment_date)}${x.note ? ' · ' + esc(x.note) : ''}
               ${x.receipt_path ? ` · <a class="receipt-link" href="${esc(x.receipt_path)}" target="_blank">📎 ${t('view_receipt')}</a>` : ''}</div>
+            <div class="li-sub" style="white-space:normal">${usage}</div>
           </div>
           <div class="li-amount received-amount">${fmt(x.amount)}</div>
           <button class="btn danger-text" onclick="confirmDelete('/api/client-payments/${x.id}')">✕</button>
-        </div>`).join('') : `<div class="empty">${t('no_client_payments')}</div>`}
+        </div>`;
+        }).join('');
+      })() : `<div class="empty">${t('no_client_payments')}</div>`}
       </div>
     </div>
     <div class="card">
