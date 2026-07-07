@@ -27,8 +27,11 @@ Open http://localhost:3000. On first run the app asks you to create the **admin 
 | Variable | Default | Purpose |
 |---|---|---|
 | `PORT` | `3000` | HTTP port |
+| `HOST` | `0.0.0.0` | Bind address — set `127.0.0.1` when running behind a reverse proxy (Caddy/Nginx) |
 | `DATA_DIR` | `./data` | Where the SQLite database, session secret, and uploaded receipts live |
 | `APP_SECRET` | auto-generated | Session-signing secret (set explicitly when deploying) |
+
+Behind an HTTPS reverse proxy the session cookie is automatically marked `Secure`. External bots/agents can authenticate with `Authorization: Bearer` tokens created in **Settings → Bot & API access** — see [API.md](API.md).
 
 The default currency is **AED**; change it in **Settings → Currency** (any 3-letter code: USD, IQD, SAR, ...).
 

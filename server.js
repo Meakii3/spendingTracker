@@ -14,7 +14,9 @@ const {
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+const HOST = process.env.HOST || '0.0.0.0';
 
+app.set('trust proxy', 'loopback');
 app.use(express.json());
 
 const ALLOWED_UPLOAD_TYPES = {
@@ -65,7 +67,7 @@ app.post('/api/setup', (req, res) => {
   if (!name || !email || !password || password.length < 6) return bad(res, 'invalid_input');
   const info = db.prepare('INSERT INTO users (name, email, password_hash, role) VALUES (?, ?, ?, ?)')
     .run(String(name).trim(), String(email).trim(), hashPassword(password), 'admin');
-  setAuthCookie(res, createToken(info.lastInsertRowid));
+  setAuthCookie(req, res, createToken(info.lastInsertRowid));
   res.json({ ok: true });
 });
 
@@ -75,7 +77,7 @@ app.post('/api/login', (req, res) => {
   if (!user || !verifyPassword(String(password || ''), user.password_hash)) {
     return res.status(401).json({ error: 'bad_credentials' });
   }
-  setAuthCookie(res, createToken(user.id));
+  setAuthCookie(req, res, createToken(user.id));
   res.json({ ok: true });
 });
 
@@ -402,6 +404,6 @@ app.use((err, req, res, next) => {
   res.status(500).json({ error: 'server_error' });
 });
 
-app.listen(PORT, () => {
-  console.log(`Spending Tracker running on http://localhost:${PORT}`);
+app.listen(PORT, HOST, () => {
+  console.log(`Spending Tracker running on http://${HOST}:${PORT}`);
 });

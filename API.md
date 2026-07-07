@@ -5,7 +5,7 @@ bot) so it can record expenses and payments in the Spending Tracker app.
 
 ## Setup
 
-- **Base URL**: `http://YOUR-SERVER:3000` (replace with your server address).
+- **Base URL**: your app's address, e.g. `https://tracker.nilyxai.cloud`.
 - **Authentication**: every request needs a header
   `Authorization: Bearer <TOKEN>`.
 - Each person creates their own token in the app under **Settings → Bot & API

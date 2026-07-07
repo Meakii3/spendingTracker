@@ -70,9 +70,10 @@ function parseCookies(req) {
   return out;
 }
 
-function setAuthCookie(res, token) {
+function setAuthCookie(req, res, token) {
+  const secure = req.secure || req.headers['x-forwarded-proto'] === 'https' ? '; Secure' : '';
   res.setHeader('Set-Cookie',
-    `token=${token}; HttpOnly; Path=/; Max-Age=${Math.floor(TOKEN_TTL_MS / 1000)}; SameSite=Lax`);
+    `token=${token}; HttpOnly; Path=/; Max-Age=${Math.floor(TOKEN_TTL_MS / 1000)}; SameSite=Lax${secure}`);
 }
 
 function clearAuthCookie(res) {
