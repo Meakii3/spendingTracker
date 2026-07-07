@@ -79,12 +79,38 @@ function clearAuthCookie(res) {
   res.setHeader('Set-Cookie', 'token=; HttpOnly; Path=/; Max-Age=0; SameSite=Lax');
 }
 
+// --- API tokens (for bots / external agents) ---
+
+function generateApiToken() {
+  return 'st_' + crypto.randomBytes(24).toString('hex');
+}
+
+function hashApiToken(token) {
+  return crypto.createHash('sha256').update(token).digest('hex');
+}
+
+function userFromBearer(header) {
+  if (!header || !header.startsWith('Bearer ')) return null;
+  const token = header.slice(7).trim();
+  if (!token.startsWith('st_')) return null;
+  const row = db.prepare(
+    `SELECT u.id, u.name, u.email, u.role, t.id AS token_id
+     FROM api_tokens t JOIN users u ON u.id = t.user_id
+     WHERE t.token_hash = ?`
+  ).get(hashApiToken(token));
+  if (!row) return null;
+  db.prepare(`UPDATE api_tokens SET last_used_at = datetime('now') WHERE id = ?`).run(row.token_id);
+  return { id: row.id, name: row.name, email: row.email, role: row.role };
+}
+
 // --- Express middleware ---
 
 function requireAuth(req, res, next) {
-  const userId = verifyToken(parseCookies(req).token);
-  if (!userId) return res.status(401).json({ error: 'unauthorized' });
-  const user = db.prepare('SELECT id, name, email, role FROM users WHERE id = ?').get(userId);
+  let user = userFromBearer(req.headers.authorization);
+  if (!user) {
+    const userId = verifyToken(parseCookies(req).token);
+    if (userId) user = db.prepare('SELECT id, name, email, role FROM users WHERE id = ?').get(userId) || null;
+  }
   if (!user) return res.status(401).json({ error: 'unauthorized' });
   req.user = user;
   next();
@@ -99,5 +125,6 @@ module.exports = {
   hashPassword, verifyPassword,
   createToken, verifyToken, parseCookies,
   setAuthCookie, clearAuthCookie,
+  generateApiToken, hashApiToken,
   requireAuth, requireAdmin,
 };

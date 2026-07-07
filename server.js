@@ -9,6 +9,7 @@ const { db, getSetting, setSetting, UPLOADS_DIR } = require('./src/db');
 const {
   hashPassword, verifyPassword, createToken,
   setAuthCookie, clearAuthCookie, requireAuth, requireAdmin,
+  generateApiToken, hashApiToken,
 } = require('./src/auth');
 
 const app = express();
@@ -122,6 +123,34 @@ app.delete('/api/users/:id', requireAuth, requireAdmin, (req, res) => {
   const id = Number(req.params.id);
   if (id === req.user.id) return bad(res, 'cannot_delete_self');
   db.prepare('DELETE FROM users WHERE id = ?').run(id);
+  res.json({ ok: true });
+});
+
+// ---------- API tokens (for the Telegram agent / bots) ----------
+
+app.get('/api/tokens', requireAuth, (req, res) => {
+  const items = db.prepare(
+    'SELECT id, name, created_at, last_used_at FROM api_tokens WHERE user_id = ? ORDER BY id DESC'
+  ).all(req.user.id);
+  res.json({ items });
+});
+
+app.post('/api/tokens', requireAuth, (req, res) => {
+  const name = String((req.body || {}).name || '').trim();
+  if (!name) return bad(res, 'invalid_input');
+  const token = generateApiToken();
+  db.prepare('INSERT INTO api_tokens (user_id, name, token_hash) VALUES (?, ?, ?)')
+    .run(req.user.id, name.slice(0, 60), hashApiToken(token));
+  res.json({ token });
+});
+
+app.delete('/api/tokens/:id', requireAuth, (req, res) => {
+  const row = db.prepare('SELECT user_id FROM api_tokens WHERE id = ?').get(Number(req.params.id));
+  if (!row) return res.status(404).json({ error: 'not_found' });
+  if (row.user_id !== req.user.id && req.user.role !== 'admin') {
+    return res.status(403).json({ error: 'forbidden' });
+  }
+  db.prepare('DELETE FROM api_tokens WHERE id = ?').run(Number(req.params.id));
   res.json({ ok: true });
 });
 

@@ -619,6 +619,7 @@ function openPayeeModal() {
 
 async function renderSettings() {
   const isAdmin = state.user.role === 'admin';
+  const tokens = (await api('/api/tokens')).items;
   let usersHtml = '';
   if (isAdmin) {
     const d = await api('/api/users');
@@ -655,6 +656,21 @@ async function renderSettings() {
       </form>
     </div>` : ''}
     ${usersHtml}
+    <div class="card">
+      <div class="section-head">
+        <h2>${t('api_access')}</h2>
+        <button class="btn small" onclick="openTokenModal()">＋ ${t('add_token')}</button>
+      </div>
+      <p class="hint">${t('api_hint')}</p>
+      ${tokens.length ? tokens.map(tk => `
+        <div class="list-item">
+          <div class="li-main">
+            <div class="li-title">${esc(tk.name)}</div>
+            <div class="li-sub">${t('last_used')}: ${tk.last_used_at ? esc(tk.last_used_at) : t('never_used')}</div>
+          </div>
+          <button class="btn danger-text" onclick="confirmDelete('/api/tokens/${tk.id}')">✕</button>
+        </div>`).join('') : ''}
+    </div>
     <div class="card">
       <div class="list-item">
         <div class="li-main">
@@ -694,6 +710,39 @@ function openUserModal() {
   document.getElementById('modal-form').addEventListener('submit', e => {
     e.preventDefault();
     submitForm(e.target, '/api/users');
+  });
+}
+
+function openTokenModal() {
+  openModal(`
+    <h3>${t('add_token')}</h3>
+    <form id="modal-form">
+      <div class="form-error"></div>
+      ${field(t('token_name'), `<input name="name" required placeholder="${t('token_name_hint')}" maxlength="60">`)}
+      <div class="modal-actions">
+        <button type="button" class="btn secondary" onclick="closeModal()">${t('cancel')}</button>
+        <button type="submit" class="btn">${t('save')}</button>
+      </div>
+    </form>`);
+  document.getElementById('modal-form').addEventListener('submit', async e => {
+    e.preventDefault();
+    const errEl = e.target.querySelector('.form-error');
+    try {
+      const d = await jsonPost('/api/tokens', Object.fromEntries(new FormData(e.target).entries()));
+      openModal(`
+        <h3>${t('token_created_title')}</h3>
+        <p class="hint">${t('token_created_msg')}</p>
+        <div style="background:var(--surface-2);border:1.5px dashed var(--hairline);border-radius:12px;padding:14px;
+                    font-family:ui-monospace,monospace;font-size:0.82rem;word-break:break-all;direction:ltr;text-align:left"
+             id="new-token">${esc(d.token)}</div>
+        <div class="modal-actions" style="margin-top:14px">
+          <button type="button" class="btn secondary" id="copy-token">${t('copy')}</button>
+          <button type="button" class="btn" onclick="closeModal();render()">${t('done')}</button>
+        </div>`);
+      document.getElementById('copy-token').addEventListener('click', async ev => {
+        try { await navigator.clipboard.writeText(d.token); ev.target.textContent = t('copied'); } catch {}
+      });
+    } catch { errEl.textContent = t('error_generic'); }
   });
 }
 
