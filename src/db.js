@@ -75,7 +75,25 @@ CREATE TABLE IF NOT EXISTS payments (
   created_at   TEXT NOT NULL DEFAULT (datetime('now'))
 );
 CREATE INDEX IF NOT EXISTS idx_payments_project ON payments(project_id, payment_date);
+
+CREATE TABLE IF NOT EXISTS client_payments (
+  id           INTEGER PRIMARY KEY AUTOINCREMENT,
+  project_id   INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+  amount       REAL NOT NULL CHECK (amount > 0),
+  payment_date TEXT NOT NULL,
+  note         TEXT NOT NULL DEFAULT '',
+  receipt_path TEXT,
+  created_by   INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  created_at   TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_client_payments_project ON client_payments(project_id, payment_date);
 `);
+
+// Migrations for databases created before these columns existed
+const projectCols = db.prepare(`SELECT name FROM pragma_table_info('projects')`).all().map(r => r.name);
+if (!projectCols.includes('contract_value')) {
+  db.exec(`ALTER TABLE projects ADD COLUMN contract_value REAL NOT NULL DEFAULT 0`);
+}
 
 db.prepare(`INSERT OR IGNORE INTO settings (key, value) VALUES ('currency', 'AED')`).run();
 

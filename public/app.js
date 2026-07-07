@@ -108,6 +108,18 @@ function budgetMeter(budget, spent) {
     </div>`;
 }
 
+function contractMeter(contract, received) {
+  if (!contract) return '';
+  const pct = (received / contract) * 100;
+  const remaining = Math.max(0, contract - received);
+  return `
+    <div class="bar-track"><div class="bar-fill good" style="width:${Math.min(100, pct)}%"></div></div>
+    <div class="meter-note">
+      <span>${Math.round(pct)}% ${t('of_contract')}</span>
+      <span class="${remaining ? '' : 'remaining-flag'}">${t('remaining_contract')}: ${fmt(remaining)}</span>
+    </div>`;
+}
+
 function openModal(innerHtml) {
   closeModal();
   const wrap = document.createElement('div');
@@ -356,9 +368,10 @@ function projectFormFields(p = {}) {
       ${field(t('status'), selectHtml('status', [['active', t('status_active')], ['on_hold', t('status_on_hold')], ['completed', t('status_completed')]], p.status || 'active'))}
     </div>
     <div class="form-grid-2">
+      ${field(t('contract_value'), `<input type="number" name="contract_value" step="0.01" min="0" inputmode="decimal" value="${p.contract_value ?? ''}">`)}
       ${field(t('budget'), `<input type="number" name="budget" step="0.01" min="0" inputmode="decimal" value="${p.budget ?? ''}">`)}
-      ${field(t('start_date'), `<input type="date" name="start_date" value="${esc(p.start_date || today())}">`)}
     </div>
+    ${field(t('start_date'), `<input type="date" name="start_date" value="${esc(p.start_date || today())}">`)}
     ${field(`${t('note')} (${t('optional')})`, `<textarea name="note" rows="2" maxlength="1000">${esc(p.note || '')}</textarea>`)}`;
 }
 
@@ -407,6 +420,29 @@ async function renderProjectDetail(id) {
       ${p.note ? `<p class="hint" style="margin-top:10px">${esc(p.note)}</p>` : ''}
     </div>
     <div class="card">
+      <div class="section-head">
+        <h2>${t('client_payments')}</h2>
+        <button class="btn small" onclick="openClientPaymentModal(${p.id})">＋ ${t('add_client_payment')}</button>
+      </div>
+      <div class="tile-row" style="margin-bottom:0">
+        <div class="stat-tile"><div class="label">${t('contract_value')}</div><div class="value">${p.contract_value ? fmt(p.contract_value) : t('none')}</div></div>
+        <div class="stat-tile"><div class="label">${t('received')}</div><div class="value">${fmt(p.received)}</div></div>
+      </div>
+      ${p.contract_value ? `<div style="margin-top:12px">${contractMeter(p.contract_value, p.received)}</div>` : ''}
+      <div style="margin-top:8px">
+      ${d.clientPayments.length ? d.clientPayments.map(x => `
+        <div class="list-item">
+          <div class="li-main">
+            <div class="li-title">${t('received_payment')}</div>
+            <div class="li-sub">${fmtDate(x.payment_date)}${x.note ? ' · ' + esc(x.note) : ''}${x.created_by_name ? ` · ${t('added_by')} ${esc(x.created_by_name)}` : ''}
+              ${x.receipt_path ? ` · <a class="receipt-link" href="${esc(x.receipt_path)}" target="_blank">📎 ${t('view_receipt')}</a>` : ''}</div>
+          </div>
+          <div class="li-amount received-amount">${fmt(x.amount)}</div>
+          <button class="btn danger-text" onclick="confirmDelete('/api/client-payments/${x.id}')">✕</button>
+        </div>`).join('') : `<div class="empty">${t('no_client_payments')}</div>`}
+      </div>
+    </div>
+    <div class="card">
       <h2>${t('cost_breakdown')}</h2>
       ${barRows(d.byCategory, r => t('pcat_' + r.category))}
     </div>
@@ -431,6 +467,28 @@ async function confirmDeleteProject(id) {
   if (!confirm(t('confirm_delete'))) return;
   try { await api(`/api/projects/${id}`, { method: 'DELETE' }); location.hash = '#/projects'; }
   catch { alert(t('error_generic')); }
+}
+
+function openClientPaymentModal(projectId) {
+  openModal(`
+    <h3>${t('add_client_payment')}</h3>
+    <form id="modal-form" enctype="multipart/form-data">
+      <div class="form-error"></div>
+      <div class="form-grid-2">
+        ${field(t('amount'), `<input type="number" name="amount" step="0.01" min="0.01" required inputmode="decimal">`)}
+        ${field(t('date'), `<input type="date" name="payment_date" value="${today()}" required>`)}
+      </div>
+      ${field(`${t('note')} (${t('optional')})`, `<input name="note" maxlength="500">`)}
+      ${field(`${t('receipt')} (${t('optional')})`, `<input type="file" name="receipt" accept="image/*,application/pdf" capture="environment">`)}
+      <div class="modal-actions">
+        <button type="button" class="btn secondary" onclick="closeModal()">${t('cancel')}</button>
+        <button type="submit" class="btn">${t('save')}</button>
+      </div>
+    </form>`);
+  document.getElementById('modal-form').addEventListener('submit', e => {
+    e.preventDefault();
+    submitForm(e.target, `/api/projects/${projectId}/client-payments`, { multipart: true });
+  });
 }
 
 async function openPaymentModal(projectId) {

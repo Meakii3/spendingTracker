@@ -195,11 +195,14 @@ app.delete('/api/payees/:id', requireAuth, (req, res) => {
 
 const PROJECT_SPENT_JOIN = `
   LEFT JOIN (SELECT project_id, SUM(amount) AS spent FROM payments GROUP BY project_id) s
-    ON s.project_id = pr.id`;
+    ON s.project_id = pr.id
+  LEFT JOIN (SELECT project_id, SUM(amount) AS received FROM client_payments GROUP BY project_id) rc
+    ON rc.project_id = pr.id`;
+const PROJECT_TOTALS = `COALESCE(s.spent, 0) AS spent, COALESCE(rc.received, 0) AS received`;
 
 app.get('/api/projects', requireAuth, (req, res) => {
   const items = db.prepare(
-    `SELECT pr.*, COALESCE(s.spent, 0) AS spent FROM projects pr ${PROJECT_SPENT_JOIN}
+    `SELECT pr.*, ${PROJECT_TOTALS} FROM projects pr ${PROJECT_SPENT_JOIN}
      ORDER BY CASE pr.status WHEN 'active' THEN 0 WHEN 'on_hold' THEN 1 ELSE 2 END, pr.id DESC`
   ).all();
   res.json({ items });
@@ -211,10 +214,13 @@ app.post('/api/projects', requireAuth, (req, res) => {
   const t = ['fitout', 'construction', 'other'].includes(type) ? type : 'fitout';
   const st = ['active', 'on_hold', 'completed'].includes(status) ? status : 'active';
   const b = Number(budget);
+  const cv = Number((req.body || {}).contract_value);
   db.prepare(
-    'INSERT INTO projects (name, client_name, type, budget, status, start_date, note) VALUES (?, ?, ?, ?, ?, ?, ?)'
+    'INSERT INTO projects (name, client_name, type, budget, contract_value, status, start_date, note) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
   ).run(String(name).trim(), String(client_name || '').trim(), t,
-        Number.isFinite(b) && b >= 0 ? b : 0, st, parseDate(start_date), String(note || '').slice(0, 1000));
+        Number.isFinite(b) && b >= 0 ? b : 0,
+        Number.isFinite(cv) && cv >= 0 ? cv : 0,
+        st, parseDate(start_date), String(note || '').slice(0, 1000));
   res.json({ ok: true });
 });
 
@@ -229,11 +235,13 @@ app.put('/api/projects/:id', requireAuth, (req, res) => {
   const status = ['active', 'on_hold', 'completed'].includes(body.status) ? body.status : existing.status;
   const b = Number(body.budget);
   const budget = body.budget !== undefined && Number.isFinite(b) && b >= 0 ? b : existing.budget;
+  const cv = Number(body.contract_value);
+  const contractValue = body.contract_value !== undefined && Number.isFinite(cv) && cv >= 0 ? cv : existing.contract_value;
   db.prepare(
-    `UPDATE projects SET name = ?, client_name = ?, type = ?, budget = ?, status = ?, start_date = ?, note = ? WHERE id = ?`
+    `UPDATE projects SET name = ?, client_name = ?, type = ?, budget = ?, contract_value = ?, status = ?, start_date = ?, note = ? WHERE id = ?`
   ).run(name,
         body.client_name !== undefined ? String(body.client_name).trim() : existing.client_name,
-        type, budget, status,
+        type, budget, contractValue, status,
         body.start_date !== undefined ? parseDate(body.start_date) : existing.start_date,
         body.note !== undefined ? String(body.note).slice(0, 1000) : existing.note,
         id);
@@ -248,9 +256,14 @@ app.delete('/api/projects/:id', requireAuth, requireAdmin, (req, res) => {
 app.get('/api/projects/:id', requireAuth, (req, res) => {
   const id = Number(req.params.id);
   const project = db.prepare(
-    `SELECT pr.*, COALESCE(s.spent, 0) AS spent FROM projects pr ${PROJECT_SPENT_JOIN} WHERE pr.id = ?`
+    `SELECT pr.*, ${PROJECT_TOTALS} FROM projects pr ${PROJECT_SPENT_JOIN} WHERE pr.id = ?`
   ).get(id);
   if (!project) return res.status(404).json({ error: 'not_found' });
+  const clientPayments = db.prepare(
+    `SELECT cp.*, u.name AS created_by_name
+     FROM client_payments cp LEFT JOIN users u ON u.id = cp.created_by
+     WHERE cp.project_id = ? ORDER BY cp.payment_date DESC, cp.id DESC`
+  ).all(id);
   const payments = db.prepare(
     `SELECT pm.*, pe.name AS payee_name, u.name AS created_by_name
      FROM payments pm
@@ -261,7 +274,35 @@ app.get('/api/projects/:id', requireAuth, (req, res) => {
   const byCategory = db.prepare(
     `SELECT category, SUM(amount) AS total FROM payments WHERE project_id = ? GROUP BY category ORDER BY total DESC`
   ).all(id);
-  res.json({ project, payments, byCategory });
+  res.json({ project, payments, byCategory, clientPayments });
+});
+
+// ---------- Client (owner) payments received against the contract ----------
+
+app.post('/api/projects/:id/client-payments', requireAuth, upload.single('receipt'), (req, res) => {
+  const projectId = Number(req.params.id);
+  if (!db.prepare('SELECT id FROM projects WHERE id = ?').get(projectId)) {
+    return res.status(404).json({ error: 'not_found' });
+  }
+  const amount = parseAmount(req.body.amount);
+  const date = parseDate(req.body.payment_date);
+  if (!amount || !date) return bad(res, 'invalid_input');
+  const receipt = req.file ? `/uploads/${req.file.filename}` : null;
+  db.prepare(
+    `INSERT INTO client_payments (project_id, amount, payment_date, note, receipt_path, created_by)
+     VALUES (?, ?, ?, ?, ?, ?)`
+  ).run(projectId, amount, date, String(req.body.note || '').slice(0, 500), receipt, req.user.id);
+  res.json({ ok: true });
+});
+
+app.delete('/api/client-payments/:id', requireAuth, (req, res) => {
+  const row = db.prepare('SELECT created_by FROM client_payments WHERE id = ?').get(Number(req.params.id));
+  if (!row) return res.status(404).json({ error: 'not_found' });
+  if (row.created_by !== req.user.id && req.user.role !== 'admin') {
+    return res.status(403).json({ error: 'forbidden' });
+  }
+  db.prepare('DELETE FROM client_payments WHERE id = ?').run(Number(req.params.id));
+  res.json({ ok: true });
 });
 
 // ---------- Project payments ----------

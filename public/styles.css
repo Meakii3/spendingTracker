@@ -101,6 +101,9 @@ body {
   min-width: 2px; transition: width 0.3s ease;
 }
 .bar-fill.over { background: var(--critical); }
+.bar-fill.good { background: var(--good); }
+
+.received-amount { color: var(--good-text); }
 
 /* ---------- Budget meter ---------- */
 
